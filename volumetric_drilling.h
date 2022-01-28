@@ -2,6 +2,7 @@
 #define GL_SILENCE_DEPRECATION
 #include <afFramework.h>
 #include "collision_publisher.h"
+#include <unordered_set>
 
 using namespace std;
 using namespace ambf;
@@ -10,6 +11,25 @@ enum HapticStates
 {
     HAPTIC_IDLE,
     HAPTIC_SELECTION
+};
+
+//Custom Hash functions for std::array<int,3>
+struct  array3Comp{
+        public:
+            int operator()( const array<int,3> & arrA, const array<int,3> &arrB) const {
+                if ( (arrA[0] == arrB[0]) && (arrA[1] == arrB[1]) && (arrA[2] == arrB[2])) {
+                    return true;
+                }else{
+                    return false;
+                }
+            }
+    };
+struct  array3Hasher{
+    public:
+        int operator()(const array<int,3> & arr) const {
+            int mod = (arr[0] + arr[1] + arr[2]) % 20000114;
+            return std::hash<int>()(mod);
+        }
 };
 
 class afVolmetricDrillingPlugin: public afSimulatorPlugin{
@@ -43,6 +63,15 @@ protected:
 
     // toggles size of the drill burr
     void changeDrillSize(void);
+
+    //recursive voxel collision collection function
+    void recursiveCheckFromVoxel(int* voxelIndex,  unordered_set<array<int,3>, array3Hasher, array3Comp> &alreadyChecked, list<array<int,3> >&listOfCollidingVoxels);
+
+    //voxel collisions collection function that calls the recursive one
+    void findIndexOfAllCollidingVoxels( list<array<int,3>> &container);
+
+    //DEBUGGER
+    void DEBUGGER();
 
 private:
     cTransform T_d; // Drills target pose
@@ -139,7 +168,18 @@ private:
     // get color of voxels at (x,y,z)
     cColorb m_storedColor;
 
+    //voxel corners coorinates lookup array
+    cVector3d*  voxelCorners;
+
+    //voxel sizes
+    double voxelSize[3];
+
+    //texture sizes
+    int texSize[3];
+
     HapticStates m_controlMode = HAPTIC_IDLE;
+
+
 };
 
 
