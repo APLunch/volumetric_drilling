@@ -69,7 +69,7 @@ protected:
 
     //voxel collisions collection function that calls the recursive one
     void findIndexOfAllCollidingVoxels( list<array<int,3>> &container);
-
+    
     //DEBUGGER
     void DEBUGGER();
 
@@ -176,6 +176,9 @@ private:
 
     //texture sizes
     int texSize[3];
+
+    //container to store first contact collisions
+    vector<array<int,3> > firstContactsPts;
 
     HapticStates m_controlMode = HAPTIC_IDLE;
 

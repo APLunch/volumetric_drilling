@@ -45,10 +45,11 @@
 
 #include "volumetric_drilling.h"
 #include <boost/program_options.hpp>
+#include <cmath>
+#include <algorithm>
 
 using namespace std;
 
-double debug_i = 0;
 
 //------------------------------------------------------------------------------
 // DECLARED FUNCTIONS
@@ -56,8 +57,6 @@ double debug_i = 0;
 
 //------------------------------------------------------------------------------
 
-//DEBUG
-cMatrix3d sb;
 
 int afVolmetricDrillingPlugin::init(int argc, char **argv, const afWorldPtr a_afWorld){
 
@@ -236,32 +235,36 @@ int afVolmetricDrillingPlugin::init(int argc, char **argv, const afWorldPtr a_af
     const int v_texHeight =m_voxelObj->m_texture->m_image->getHeight();
     const int v_texDepth = m_voxelObj->m_texture->m_image->getImageCount();
 
+    #ifdef DEBUG
     //DEBUG
     cout<<"voxel sizes = "<<cVector3d(v_width,v_height,v_depth)<<endl;
     cout<<"texture sizes = "<<cVector3d(v_texWidth, v_texHeight, v_texDepth)<<endl;;
+    #endif
 
     //Initialized corner coordinate lookup array
     voxelCorners = new cVector3d[v_texWidth*v_texHeight*v_texDepth*8];
+
+    #ifdef DEBUG
     //DEBUG
     cout<<"Total of "<<v_texWidth*v_texHeight*v_texDepth<< " voxels"<<endl;
+    #endif
 
     //Get pose of the voxel object
     cVector3d voxelObjPos = m_volumeObject-> getLocalPos();
     cMatrix3d voxelObjRot = m_volumeObject -> getLocalRot();
-    //DEBUG
-    sb = voxelObjRot;
-    //DEBUG
-    //voxelObjRot.identity();
-    //m_volumeObject->setLocalRot(voxelObjRot);
+
     cVector3d v000GlobalPos = voxelObjPos + voxelObjRot*(m_voxelObj-> m_minCorner);
-    cout<<voxelObjPos<<endl;
-    /*DEBUG
+    
+    #ifdef DEBUG
+    //DEBUG
     cout<<"Rot"<<endl;
+    cout<<voxelObjPos<<endl;
     cout<<voxelObjRot.getRow(0)<<endl;;
     cout<<voxelObjRot.getRow(1)<<endl;;
     cout<<voxelObjRot.getRow(2)<<endl;;
-    */
+    cout<<"V000 Pos"<<endl;
     cout<<v000GlobalPos<<endl;
+    #endif
 
     
     //Load voxel corners to container
@@ -326,14 +329,15 @@ void afVolmetricDrillingPlugin::recursiveCheckFromVoxel(int* voxelIndex,  unorde
     /*Check if voxel is colliding with tool body*/
     bool collision = false;
     int numCornersInTool = 0;
-    //Check if any corners within tool radius
+    //Check if any corners intersects with tool body
     for (int cor = 0; cor < 8; cor++){
         cVector3d ray = (toolCursor->m_hapticPoint ->  getGlobalPosProxy()) - voxelCorners[ i_x * (texSize[1] *texSize[2] * 8) +  i_y * (texSize[2] * 8) + i_z * 8 + cor];
+        #ifdef DEBUG
         //DEBUG
-        //cout<<"RAY LENGTH:"<<ray.length() <<endl;
-        //cout<<"MARGIN:"<<m_burrMesh->getRadius()<<endl;
-        
-        if (ray.length() < (m_burrMesh->getRadius())) {
+        cout<<"RAY LENGTH:"<<ray.length() <<endl;
+        cout<<"MARGIN:"<<m_burrMesh->getRadius()<<endl;
+        #endif
+        if (ray.lengthsq() < pow( m_burrMesh->getRadius(), 2  )) {
             numCornersInTool++;
         }
     }
@@ -347,7 +351,7 @@ void afVolmetricDrillingPlugin::recursiveCheckFromVoxel(int* voxelIndex,  unorde
     }
 
     /* Exit if no collision detected */
-    if(!collision && alreadyChecked.size() != 1){
+    if(!collision && find(firstContactsPts.begin(), firstContactsPts.end(), index) == firstContactsPts.end() ){
         return;
     }
 
@@ -384,18 +388,26 @@ void afVolmetricDrillingPlugin::findIndexOfAllCollidingVoxels( list<array<int,3>
     // CHECK VOXELS FOR COLLISION
     ////////////////////////////////////////////////////////////////////////////
 
-    //Get first collision point
-    cCollisionEvent* firstContact = m_toolCursorList[0]->m_hapticPoint->getCollisionEvent(0);
-    cVector3d v(firstContact->m_voxelIndexX, firstContact->m_voxelIndexY, firstContact->m_voxelIndexZ);
+    //Get first collision point(s)
+    int numCollisionEvent = m_toolCursorList[0]->m_hapticPoint->getNumCollisionEvents();
+    for (int i = 0; i < numCollisionEvent; i++){
+        cCollisionEvent* firstContact = m_toolCursorList[0]->m_hapticPoint->getCollisionEvent(0);
+        cVector3d v(firstContact->m_voxelIndexX, firstContact->m_voxelIndexY, firstContact->m_voxelIndexZ);
+        int collisionVoxIndex[3] = {int(v.x()), int(v.y()), int(v.z())};          
+        array<int,3> firstCollisionVoxelIndex({int(v.x()), int(v.y()), int(v.z())}); 
+        firstContactsPts.push_back(firstCollisionVoxelIndex);                                                                                                                                                                                                                                          
+        container.push_back(firstCollisionVoxelIndex);
+        //Recursively check tool collision on near-by voxels, starting from first collision point
+        unordered_set<array<int,3>, array3Hasher, array3Comp> alreadyChecked;
+        recursiveCheckFromVoxel(collisionVoxIndex, alreadyChecked, container);
+    }
+    firstContactsPts.clear();
+    
+    #ifdef DEBUG
     //DEBUG
     cout<<"Collision at v: "<<v<<endl;
-    int collisionVoxIndex[3] = {int(v.x()), int(v.y()), int(v.z())};          
-    array<int,3> firstCollisionVoxelIndex({int(v.x()), int(v.y()), int(v.z())});                                                                                                                                                                                                                                                       
-    container.push_back(firstCollisionVoxelIndex);
-    //Recursively check tool collision on near-by voxels, starting from first collision point
-    unordered_set<array<int,3>, array3Hasher, array3Comp> alreadyChecked;
-    recursiveCheckFromVoxel(collisionVoxIndex, alreadyChecked, container);
     cout << "Voxel Looked:" << alreadyChecked.size() << endl;
+    #endif
 }
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -441,8 +453,10 @@ void afVolmetricDrillingPlugin::DEBUGGER(){
 
 void afVolmetricDrillingPlugin::physicsUpdate(double dt){
     //DEBUG
-    //cout<<"m_voxelObj->getLocalPos() : "<<m_voxelObj->getLocalPos()<<endl;
-   //DEBUGGER();
+    #ifdef DEBUG
+    cout<<"m_voxelObj->getLocalPos() : "<<m_voxelObj->getLocalPos()<<endl;
+    DEBUGGER();
+    #endif
 
     m_worldPtr->getChaiWorld()->computeGlobalPositions(true);
     bool clutch;
@@ -484,8 +498,9 @@ void afVolmetricDrillingPlugin::physicsUpdate(double dt){
         findIndexOfAllCollidingVoxels(allCollidingVoxelIndex);
 
         //DEBUG
+        #ifdef DEBUG
         cout << "# Voxel Marked:" << allCollidingVoxelIndex.size() << endl;
-
+        #endif
         //Critical region flag
         bool critialRegionFlag = false;
 
