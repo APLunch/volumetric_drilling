@@ -177,8 +177,6 @@ private:
     //texture sizes
     int texSize[3];
 
-    //container to store first contact collisions
-    vector<array<int,3> > firstContactsPts;
 
     HapticStates m_controlMode = HAPTIC_IDLE;
 

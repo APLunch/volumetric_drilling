@@ -342,7 +342,7 @@ void afVolmetricDrillingPlugin::recursiveCheckFromVoxel(int* voxelIndex,  unorde
         }
     }
     //If number of corners in contact with tool >0 and <8, then collision
-    if(numCornersInTool >0 && numCornersInTool < 8 && m_storedColor != m_zeroColor){
+    if(numCornersInTool >0 && numCornersInTool < 8 /* && m_storedColor != m_zeroColor*/ ){
         collision = true;
         if(m_storedColor != m_zeroColor){
             listOfCollidingVoxels.push_back( index );
@@ -351,7 +351,7 @@ void afVolmetricDrillingPlugin::recursiveCheckFromVoxel(int* voxelIndex,  unorde
     }
 
     /* Exit if no collision detected */
-    if(!collision && find(firstContactsPts.begin(), firstContactsPts.end(), index) == firstContactsPts.end() ){
+    if(!collision && alreadyChecked.size() != 1  ){
         return;
     }
 
@@ -389,19 +389,14 @@ void afVolmetricDrillingPlugin::findIndexOfAllCollidingVoxels( list<array<int,3>
     ////////////////////////////////////////////////////////////////////////////
 
     //Get first collision point(s)
-    int numCollisionEvent = m_toolCursorList[0]->m_hapticPoint->getNumCollisionEvents();
-    for (int i = 0; i < numCollisionEvent; i++){
-        cCollisionEvent* firstContact = m_toolCursorList[0]->m_hapticPoint->getCollisionEvent(0);
-        cVector3d v(firstContact->m_voxelIndexX, firstContact->m_voxelIndexY, firstContact->m_voxelIndexZ);
-        int collisionVoxIndex[3] = {int(v.x()), int(v.y()), int(v.z())};          
-        array<int,3> firstCollisionVoxelIndex({int(v.x()), int(v.y()), int(v.z())}); 
-        firstContactsPts.push_back(firstCollisionVoxelIndex);                                                                                                                                                                                                                                          
-        container.push_back(firstCollisionVoxelIndex);
-        //Recursively check tool collision on near-by voxels, starting from first collision point
-        unordered_set<array<int,3>, array3Hasher, array3Comp> alreadyChecked;
-        recursiveCheckFromVoxel(collisionVoxIndex, alreadyChecked, container);
-    }
-    firstContactsPts.clear();
+    cCollisionEvent* firstContact = m_toolCursorList[0]->m_hapticPoint->getCollisionEvent(0);
+    cVector3d v(firstContact->m_voxelIndexX, firstContact->m_voxelIndexY, firstContact->m_voxelIndexZ);
+    int collisionVoxIndex[3] = {int(v.x()), int(v.y()), int(v.z())};          
+    array<int,3> firstCollisionVoxelIndex({int(v.x()), int(v.y()), int(v.z())});                                                                                                                                                                                                                                          
+    container.push_back(firstCollisionVoxelIndex);
+    //Recursively check tool collision on near-by voxels, starting from first collision point
+    unordered_set<array<int,3>, array3Hasher, array3Comp> alreadyChecked;
+    recursiveCheckFromVoxel(collisionVoxIndex, alreadyChecked, container);
     
     #ifdef DEBUG
     //DEBUG
